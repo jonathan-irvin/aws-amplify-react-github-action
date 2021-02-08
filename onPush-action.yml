@@ -1,0 +1,62 @@
+name: "List, Test, Build, then Deploy to AWS Amplify"
+on:
+  push:
+    branches:    
+      # Push events on main branch
+      - main
+
+jobs:
+    build:
+        name: build and deploy
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [12.x]
+                aws-region: [us-east-2]
+                aws-env: [staging]
+        steps:
+            - uses: actions/checkout@v1
+
+            - name: use node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v1
+              with:
+                  node-version: ${{ matrix.node-version }}
+
+            - name: configure amplify
+              uses: ambientlight/amplify-cli-action@0.2.1
+              with:
+                  amplify_command: configure
+                  amplify_env: ${{ matrix.aws-env }}
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: ${{ matrix.aws-region }}
+
+            - uses: actions/cache@v2
+              with:
+                  path: "**/node_modules"
+                  key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+
+            - name: Install JS dependencies
+              run: yarn install
+
+            - name: Lint
+              run: yarn lint
+
+            - name: Test
+              run: yarn test:ci
+              env:
+                  CI: true
+
+            - name: Build
+              run: yarn build
+
+            - name: deploy
+              uses: ambientlight/amplify-cli-action@0.2.1
+              with:
+                  amplify_command: publish
+                  amplify_env: ${{ matrix.aws-env }}
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: ${{ matrix.aws-region }}
